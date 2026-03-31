@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Extractor - Batch Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark-scroll::-webkit-scrollbar-track { background: #1f2937; }
+        .dark-scroll::-webkit-scrollbar-thumb { background: #4b5563; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-800 flex flex-col">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-sm px-6 py-4 border-b border-gray-200 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg shadow-sm">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </div>
+                <h1 class="text-xl font-bold text-gray-900 tracking-tight">AI Document Extractor</h1>
+            </div>
+            <div class="text-sm text-gray-500 font-medium flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                LM Studio Connected
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 flex flex-col gap-6">
+        
+        <!-- Top Section: Upload & Settings -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- Left: Dropzone -->
+                <div class="flex flex-col h-full">
+                    <h2 class="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
+                        <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                        Upload Documents <span class="text-gray-400 text-sm font-normal">(Select multiple files)</span>
+                    </h2>
+                    <div id="dropZone" class="flex-grow border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all group min-h-[200px]">
+                        <div class="bg-gray-50 group-hover:bg-white p-4 rounded-full mb-4 shadow-sm transition-colors border border-gray-100">
+                            <svg class="w-10 h-10 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        </div>
+                        <p class="text-base text-gray-700 text-center"><span class="font-semibold text-blue-600">Click to browse</span> or drag and drop</p>
+                        <p class="text-xs text-gray-500 mt-2">Hold <span class="font-bold text-gray-700">Ctrl</span> (or Cmd on Mac) to select multiple files</p>
+                        <input type="file" id="fileInput" class="hidden" accept=".pdf,image/png,image/jpeg,image/jpg" multiple onchange="handleFiles(this.files)">
+                        <input type="file" id="fileInput" class="hidden" accept=".pdf,image/png,image/jpeg,image/jpg" multiple>
+                    </div>
+                    
+                    <!-- File List Preview -->
+                    <div id="fileList" class="mt-4 space-y-2 hidden">
+                        <p class="text-sm font-semibold text-gray-700">Selected Files:</p>
+                        <div id="fileListContainer" class="max-h-32 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50 p-2"></div>
+                    </div>
+                </div>
+
+                <!-- Right: Configuration & Action -->
+                <div class="flex flex-col h-full justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
+                            <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                            Configuration
+                        </h2>
+                        
+                        <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+                            <label for="customPrompt" class="block text-sm font-semibold text-gray-700 mb-2 flex items-center justify-between">
+                                Custom AI Instructions
+                                <span class="bg-gray-200 text-gray-600 text-[10px] uppercase px-2 py-0.5 rounded tracking-wider font-bold">Optional</span>
+                            </label>
+                            <textarea id="customPrompt" rows="3" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white placeholder-gray-400 shadow-inner" placeholder="E.g., 'Make sure finalPayableAmount completely ignores tax'"></textarea>
+                        </div>
+                    </div>
+                    
+                    <button id="extractBtn" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Extract All Documents
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section: Results -->
+        <div id="workspaceArea" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden min-h-[500px]">
+                
+                <!-- Header -->
+                <div class="bg-gray-900 text-gray-100 px-5 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800">
+                    <div class="flex items-center gap-4">
+                        <h2 class="text-lg font-semibold font-mono flex items-center gap-2">
+                            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-3-4h.01M9 16h.01"></path></svg>
+                            Extraction Results
+                        </h2>
+                        
+                        <!-- Tabs -->
+                        <div class="flex bg-gray-800 rounded-lg p-1 border border-gray-700 shadow-inner">
+                            <button id="tabTable" class="px-4 py-1.5 text-xs sm:text-sm rounded bg-gray-600 text-white shadow font-medium transition-colors">Table View</button>
+                            <button id="tabJson" class="px-4 py-1.5 text-xs sm:text-sm rounded text-gray-400 hover:text-white font-medium transition-colors">JSON View</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <span id="statsBadge" class="text-xs text-gray-400 font-mono">0 files processed</span>
+                        <span id="statusBadge" class="bg-gray-800 text-xs py-1.5 px-3 rounded-full font-mono border border-gray-700 text-gray-400 shadow-inner">Ready</span>
+                    </div>
+                </div>
+                
+                <div class="flex-grow p-0 bg-gray-900 relative overflow-hidden flex flex-col dark-scroll">
+                    
+                    <!-- Loading Overlay -->
+                    <div id="loadingOverlay" class="absolute inset-0 bg-gray-900/95 backdrop-blur-md flex flex-col items-center justify-center z-20 hidden">
+                        <div class="relative">
+                            <div class="w-16 h-16 border-4 border-blue-900 rounded-full"></div>
+                            <div class="w-16 h-16 border-4 border-blue-500 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+                        </div>
+                        <p class="text-blue-400 font-mono text-sm mt-6 animate-pulse text-center">AI is analyzing documents...</p>
+                        <p id="loadingProgress" class="text-xs text-gray-500 mt-2 font-mono">Processing file 1 of 3</p>
+                    </div>
+
+                    <!-- TABLE VIEW -->
+                    <div id="tableView" class="w-full h-full p-6 overflow-auto text-gray-200">
+                        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-inner">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-800/50">
+                                    <tr class="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+                                        <th class="py-3 px-4 w-16">#</th>
+                                        <th class="py-3 px-4">Filename</th>
+                                        <th class="py-3 px-4">From</th>
+                                        <th class="py-3 px-4">Doc No</th>
+                                        <th class="py-3 px-4">Date</th>
+                                        <th class="py-3 px-4">Description</th>
+                                        <th class="py-3 px-4 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody" class="text-sm font-mono divide-y divide-gray-700/50">
+                                    <tr>
+                                        <td colspan="7" class="py-12 text-center text-gray-500 italic font-sans bg-gray-800/30">
+                                            No results yet. Upload files and click Extract.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- JSON VIEW -->
+                    <pre id="jsonOutput" class="w-full h-full text-green-400 font-mono text-sm p-6 overflow-auto bg-transparent focus:outline-none hidden">
+{
+  "status": "Waiting for input..."
+}
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<script>
+    // Elements
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const extractBtn = document.getElementById('extractBtn');
+    const customPromptInput = document.getElementById('customPrompt');
+    const fileList = document.getElementById('fileList');
+    const fileListContainer = document.getElementById('fileListContainer');
+    const workspaceArea = document.getElementById('workspaceArea');
+    
+    const tableView = document.getElementById('tableView');
+    const jsonOutput = document.getElementById('jsonOutput');
+    const tableBody = document.getElementById('tableBody');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingProgress = document.getElementById('loadingProgress');
+    const statusBadge = document.getElementById('statusBadge');
+    const statsBadge = document.getElementById('statsBadge');
+    
+    const tabTable = document.getElementById('tabTable');
+    const tabJson = document.getElementById('tabJson');
+
+    let currentFiles = [];
+
+    // Tab Switching
+    tabTable.addEventListener('click', () => {
+        tabTable.classList.add('bg-gray-600', 'text-white', 'shadow');
+        tabTable.classList.remove('text-gray-400');
+        tabJson.classList.remove('bg-gray-600', 'text-white', 'shadow');
+        tabJson.classList.add('text-gray-400');
+        tableView.classList.remove('hidden');
+        jsonOutput.classList.add('hidden');
+    });
+
+    tabJson.addEventListener('click', () => {
+        tabJson.classList.add('bg-gray-600', 'text-white', 'shadow');
+        tabJson.classList.remove('text-gray-400');
+        tabTable.classList.remove('bg-gray-600', 'text-white', 'shadow');
+        tabTable.classList.add('text-gray-400');
+        jsonOutput.classList.remove('hidden');
+        tableView.classList.add('hidden');
+    });
+
+    // File Upload Logic
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-active', 'border-blue-500');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-active', 'border-blue-500');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-active', 'border-blue-500');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
+        }
+    });
+
+    dropZone.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('fileInput').click();
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleFiles(e.target.files);
+        }
+    });
+
+    function handleFiles(files) {
+        const newFiles = Array.from(files);
+        
+        // Append new files to existing array (avoid duplicates by name)
+        newFiles.forEach(file => {
+            if (!currentFiles.find(f => f.name === file.name)) {
+                currentFiles.push(file);
+            }
+        });
+        
+        if (currentFiles.length > 0) {
+            workspaceArea.classList.remove('hidden');
+            extractBtn.disabled = false;
+            fileList.classList.remove('hidden');
+            
+            // Render file list
+            fileListContainer.innerHTML = currentFiles.map((file, idx) => `
+                <div class="flex items-center justify-between bg-white p-2 rounded border border-gray-200 text-sm">
+                    <span class="truncate flex-1">${file.name}</span>
+                    <button onclick="removeFile(${idx})" class="text-red-500 hover:text-red-700 ml-2">✕</button>
+                </div>
+            `).join('');
+            
+            // Reset results
+            tableBody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-blue-400 italic font-sans bg-gray-800/30">Ready to extract <strong>${currentFiles.length}</strong> files</td></tr>`;
+            jsonOutput.textContent = '{\n  "status": "Ready to extract"\n}';
+            statusBadge.textContent = 'Ready';
+            statusBadge.className = 'bg-blue-600/20 text-blue-400 text-xs py-1.5 px-3 rounded-full font-mono border border-blue-500/30 shadow-inner';
+        }
+    }
+
+    // Allow removing files from list
+    window.removeFile = function(idx) {
+        currentFiles.splice(idx, 1);
+        if (currentFiles.length === 0) {
+            fileList.classList.add('hidden');
+            extractBtn.disabled = true;
+        } else {
+            fileListContainer.innerHTML = currentFiles.map((file, i) => `
+                <div class="flex items-center justify-between bg-white p-2 rounded border border-gray-200 text-sm">
+                    <span class="truncate flex-1">${file.name}</span>
+                    <button onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 ml-2">✕</button>
+                </div>
+            `).join('');
+        }
+    };
+
+    // Extract Logic
+    extractBtn.addEventListener('click', async () => {
+        if (currentFiles.length === 0) return;
+
+        extractBtn.disabled = true;
+        loadingOverlay.classList.remove('hidden');
+        workspaceArea.classList.remove('hidden');
+        
+        const formData = new FormData();
+        currentFiles.forEach(file => formData.append('files', file));
+        
+        const customPromptValue = customPromptInput.value.trim();
+        if (customPromptValue) {
+            formData.append('custom_prompt', customPromptValue);
+        }
+
+        try {
+            const response = await fetch('/api/v1/extract/batch', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            
+            // Update JSON View
+            jsonOutput.textContent = JSON.stringify(data, null, 4);
+
+            // Update Table View
+            if (data.result && data.result.items) {
+                const items = data.result.items;
+                statsBadge.textContent = `${data.result.successful}/${data.result.totalFiles} files processed`;
+                
+                if (items.length > 0) {
+                    let rowsHtml = '';
+                    items.forEach((item, idx) => {
+                        rowsHtml += `
+                            <tr class="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
+                                <td class="py-3 px-4 text-gray-400">${idx + 1}</td>
+                                <td class="py-3 px-4 font-medium text-blue-300">${item._filename || 'Unknown'}</td>
+                                <td class="py-3 px-4">${item.from || '<span class="text-gray-500">-</span>'}</td>
+                                <td class="py-3 px-4">${item.documentNo || '<span class="text-gray-500">-</span>'}</td>
+                                <td class="py-3 px-4">${item.documentDate || '<span class="text-gray-500">-</span>'}</td>
+                                <td class="py-3 px-4 max-w-xs truncate" title="${item.summaryDescription || ''}">${item.summaryDescription || '<span class="text-gray-500">-</span>'}</td>
+                                <td class="py-3 px-4 text-right font-medium text-green-400">${item.finalPayableAmount || '0.00'}</td>
+                            </tr>
+                        `;
+                    });
+                    tableBody.innerHTML = rowsHtml;
+                    
+                    statusBadge.textContent = 'Success';
+                    statusBadge.className = 'bg-green-500/20 text-green-400 text-xs py-1.5 px-3 rounded-full font-mono border border-green-500/30 shadow-inner';
+                    
+                    tabTable.click();
+                }
+            } else if (data.errCode) {
+                statusBadge.textContent = 'Error';
+                statusBadge.className = 'bg-red-500/20 text-red-400 text-xs py-1.5 px-3 rounded-full font-mono border border-red-500/30 shadow-inner';
+            }
+
+        } catch (error) {
+            console.error(error);
+            statusBadge.textContent = 'Failed';
+            statusBadge.className = 'bg-red-500/20 text-red-400 text-xs py-1.5 px-3 rounded-full font-mono border border-red-500/30 shadow-inner';
+        } finally {
+            extractBtn.disabled = false;
+            loadingOverlay.classList.add('hidden');
+        }
+    });
+</script>
+</body>
+</html>
