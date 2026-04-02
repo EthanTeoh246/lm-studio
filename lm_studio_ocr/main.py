@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 
 # Import from local flat files
-from schemas import APIResponse, ExtractionResult
+from schemas import APIResponse
 import ocr_engine
 
 app = FastAPI(
@@ -31,31 +31,35 @@ async def serve_ui():
 # ----------------- API ROUTE: SINGLE FILE -----------------
 @app.post("/api/v1/extract", response_model=APIResponse, tags=["OCR API"])
 async def extract_document_api(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # Consider adding max_size for file limit
     custom_prompt: Optional[str] = Form(None)
 ):
     """
     Upload a single PDF or Image, and receive structured JSON extracted via the Local LLM.
     """
     try:
+        # Check file size (max 10MB)
         contents = await file.read()
+        if len(contents) > 10_000_000:
+            return APIResponse(errCode="413", error="File too large. Maximum size is 10MB.", result=None)
+        
         mime_type = file.content_type
         
-        # 1. Convert File to Base64 Image
-        base64_img, error_msg = ocr_engine.process_file_to_base64(contents, mime_type)
+        # 1. Convert File to Base64 Images (one per page)
+        base64_images, error_msg = ocr_engine.process_file_to_base64_list(contents, mime_type)
         if error_msg:
-            return {"errCode": "400", "error": error_msg, "result": None}
+            return APIResponse(errCode="400", error=error_msg, result=None)
 
-        # 2. Extract Data via LLM
-        result_obj, err_code, llm_error = ocr_engine.extract_document_data(base64_img, custom_prompt)
+        # 2. Extract Data via LLM (processes each page)
+        result_obj, err_code, llm_error = ocr_engine.extract_document_data_multi_page(base64_images, custom_prompt)
         if llm_error:
-            return {"errCode": err_code, "error": llm_error, "result": None}
+            return APIResponse(errCode=err_code, error=llm_error, result=None)
 
         # 3. Return Success
-        return {"errCode": None, "error": None, "result": result_obj}
+        return APIResponse(errCode=None, error=None, result=result_obj)
 
     except Exception as e:
-        return {"errCode": "500", "error": f"Internal Server Error: {str(e)}", "result": None}
+        return APIResponse(errCode="500", error=f"Internal Server Error: {str(e)}", result=None)
 
 # ----------------- API ROUTE: MULTIPLE FILES -----------------
 @app.post("/api/v1/extract/batch", tags=["OCR API"])
@@ -72,16 +76,22 @@ async def extract_multiple_documents(
     for idx, file in enumerate(files):
         try:
             contents = await file.read()
+            
+            # Check individual file size (max 10MB)
+            if len(contents) > 10_000_000:
+                errors.append({"file": file.filename, "error": "File too large. Maximum size is 10MB."})
+                continue
+                
             mime_type = file.content_type
             
-            # Convert File to Base64 Image
-            base64_img, error_msg = ocr_engine.process_file_to_base64(contents, mime_type)
+            # Convert File to Base64 Images (one per page)
+            base64_images, error_msg = ocr_engine.process_file_to_base64_list(contents, mime_type)
             if error_msg:
                 errors.append({"file": file.filename, "error": error_msg})
                 continue
 
-            # Extract Data via LLM
-            result_obj, err_code, llm_error = ocr_engine.extract_document_data(base64_img, custom_prompt)
+            # Extract Data via LLM (processes each page)
+            result_obj, err_code, llm_error = ocr_engine.extract_document_data_multi_page(base64_images, custom_prompt)
             if llm_error:
                 errors.append({"file": file.filename, "error": llm_error})
                 continue
@@ -93,14 +103,14 @@ async def extract_multiple_documents(
         except Exception as e:
             errors.append({"file": file.filename, "error": str(e)})
     
-    return {
-        "errCode": None if not errors else "206",  # 206 = Partial Content if some failed
-        "error": None,
-        "result": {
+    return APIResponse(
+        errCode=None if not errors else "206",
+        error=None,
+        result={
             "totalFiles": len(files),
             "successful": len(results),
             "failed": len(errors),
             "items": results,
             "errors": errors
         }
-    }
+    )

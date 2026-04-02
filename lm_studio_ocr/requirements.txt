@@ -4,3 +4,5 @@ python-multipart
 requests
 pymupdf
 pydantic
+Pillow
+pytest
